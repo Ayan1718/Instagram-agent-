@@ -1,1 +1,13 @@
 
+{
+  "name": "daily-frame-instagram-server",
+  "version": "1.0.0",
+  "private": true,
+  "main": "oauth.js",
+  "scripts": {
+    "start": "node oauth.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
