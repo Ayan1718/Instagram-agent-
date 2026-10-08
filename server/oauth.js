@@ -3,6 +3,8 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+let metaAccessToken = null;
+
 app.get("/", (req, res) => {
   res.send("Daily Frame Instagram Agent is running.");
 });
@@ -25,7 +27,7 @@ app.get("/auth/meta/callback", async (req, res) => {
       client_id: process.env.META_APP_ID,
       client_secret: process.env.META_APP_SECRET,
       redirect_uri: process.env.META_REDIRECT_URI,
-      code: code,
+      code,
     });
 
     const response = await fetch(
@@ -41,20 +43,28 @@ app.get("/auth/meta/callback", async (req, res) => {
 
     const data = await response.json();
 
-    if (!response.ok || data.error) {
-      console.error("Meta token exchange error:", data);
+    if (!response.ok || data.error || !data.access_token) {
+      console.error("Meta token exchange failed.");
       return res
         .status(400)
         .send("Meta token exchange failed. Check Render logs.");
     }
 
+    metaAccessToken = data.access_token;
+
     console.log("Meta access token received successfully.");
 
     res.send("Meta access token received successfully.");
   } catch (err) {
-    console.error("OAuth callback error:", err);
+    console.error("OAuth callback error:", err.message);
     res.status(500).send("Server error during Meta token exchange.");
   }
+});
+
+app.get("/auth/meta/status", (req, res) => {
+  res.json({
+    connected: Boolean(metaAccessToken),
+  });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
