@@ -7,7 +7,10 @@ let metaAccessToken = null;
 
 // Home
 app.get("/", (req, res) => {
-  res.send("Daily Frame Instagram Agent is running.");
+  res.json({
+    app: "Daily Frame Instagram Agent",
+    status: "running",
+  });
 });
 
 // Meta OAuth callback
@@ -63,26 +66,29 @@ app.get("/auth/meta/callback", async (req, res) => {
   }
 });
 
-// Connection status
+// Meta connection status
 app.get("/auth/meta/status", (req, res) => {
   res.json({
     connected: Boolean(metaAccessToken),
   });
 });
 
-// Get Facebook Pages and connected Instagram accounts
+// Instagram account lookup
 app.get("/auth/meta/instagram", async (req, res) => {
   if (!metaAccessToken) {
     return res.status(401).json({
+      connected: false,
       error: "Not connected to Meta",
     });
   }
 
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/v24.0/me/accounts?fields=id,name,instagram_business_account&access_token=${metaAccessToken}`
-    );
+    const url =
+      "https://graph.facebook.com/v24.0/me/accounts" +
+      "?fields=id,name,instagram_business_account" +
+      `&access_token=${encodeURIComponent(metaAccessToken)}`;
 
+    const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok || data.error) {
@@ -100,6 +106,15 @@ app.get("/auth/meta/instagram", async (req, res) => {
       error: "Server error during Instagram lookup.",
     });
   }
+});
+
+// API status
+app.get("/api", (req, res) => {
+  res.json({
+    app: "Daily Frame Instagram Agent",
+    server: "online",
+    meta_connected: Boolean(metaAccessToken),
+  });
 });
 
 // Start server
