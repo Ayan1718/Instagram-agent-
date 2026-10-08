@@ -5,10 +5,12 @@ const PORT = process.env.PORT || 3000;
 
 let metaAccessToken = null;
 
+// Home
 app.get("/", (req, res) => {
   res.send("Daily Frame Instagram Agent is running.");
 });
 
+// Meta OAuth callback
 app.get("/auth/meta/callback", async (req, res) => {
   const { code, error, error_description } = req.query;
 
@@ -61,12 +63,46 @@ app.get("/auth/meta/callback", async (req, res) => {
   }
 });
 
+// Connection status
 app.get("/auth/meta/status", (req, res) => {
   res.json({
     connected: Boolean(metaAccessToken),
   });
 });
 
+// Get Facebook Pages and connected Instagram accounts
+app.get("/auth/meta/instagram", async (req, res) => {
+  if (!metaAccessToken) {
+    return res.status(401).json({
+      error: "Not connected to Meta",
+    });
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v24.0/me/accounts?fields=id,name,instagram_business_account&access_token=${metaAccessToken}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      console.error("Instagram account lookup failed.");
+      return res.status(400).json({
+        error: "Instagram account lookup failed.",
+      });
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("Instagram lookup error:", err.message);
+
+    res.status(500).json({
+      error: "Server error during Instagram lookup.",
+    });
+  }
+});
+
+// Start server
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
