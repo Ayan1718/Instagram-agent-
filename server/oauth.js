@@ -11,14 +11,50 @@ app.get("/auth/meta/callback", async (req, res) => {
   const { code, error, error_description } = req.query;
 
   if (error) {
-    return res.status(400).send(`Meta login error: ${error_description || error}`);
+    return res
+      .status(400)
+      .send(`Meta login error: ${error_description || error}`);
   }
 
   if (!code) {
     return res.status(400).send("No authorization code received.");
   }
 
-  res.send("Meta authorization code received successfully.");
+  try {
+    const params = new URLSearchParams({
+      client_id: process.env.META_APP_ID,
+      client_secret: process.env.META_APP_SECRET,
+      redirect_uri: process.env.META_REDIRECT_URI,
+      code: code,
+    });
+
+    const response = await fetch(
+      "https://graph.facebook.com/v24.0/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      console.error("Meta token exchange error:", data);
+      return res
+        .status(400)
+        .send("Meta token exchange failed. Check Render logs.");
+    }
+
+    console.log("Meta access token received successfully.");
+
+    res.send("Meta access token received successfully.");
+  } catch (err) {
+    console.error("OAuth callback error:", err);
+    res.status(500).send("Server error during Meta token exchange.");
+  }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
