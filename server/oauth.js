@@ -5,119 +5,270 @@ const PORT = process.env.PORT || 3000;
 
 let metaAccessToken = null;
 
+const GRAPH_API = "https://graph.facebook.com/v24.0";
+
+// Safely call Meta Graph API without exposing access tokens.
+async function metaGet(path, params = {}) {
+const url = new URL("${GRAPH_API}${path}");
+
+url.searchParams.set("access_token", metaAccessToken);
+
+for (const [key, value] of Object.entries(params)) {
+url.searchParams.set(key, value);
+}
+
+const response = await fetch(url);
+const data = await response.json();
+
+return {
+ok: response.ok && !data.error,
+status: response.status,
+data,
+};
+}
+
 // Home
 app.get("/", (req, res) => {
-  res.json({
-    app: "Daily Frame Instagram Agent",
-    status: "running",
-  });
+res.json({
+app: "Daily Frame Instagram Agent",
+status: "running",
+});
 });
 
 // Meta OAuth callback
 app.get("/auth/meta/callback", async (req, res) => {
-  const { code, error, error_description } = req.query;
+const { code, error, error_description } = req.query;
 
-  if (error) {
-    return res
-      .status(400)
-      .send(`Meta login error: ${error_description || error}`);
+if (error) {
+return res.status(400).send(
+"Meta login error: ${error_description || error}"
+);
+}
+
+if (!code) {
+return res.status(400).send("No authorization code received.");
+}
+
+try {
+const params = new URLSearchParams({
+client_id: process.env.META_APP_ID,
+client_secret: process.env.META_APP_SECRET,
+redirect_uri: process.env.META_REDIRECT_URI,
+code,
+});
+
+const response = await fetch(
+  `${GRAPH_API}/oauth/access_token`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
   }
+);
 
-  if (!code) {
-    return res.status(400).send("No authorization code received.");
-  }
+const data = await response.json();
 
-  try {
-    const params = new URLSearchParams({
-      client_id: process.env.META_APP_ID,
-      client_secret: process.env.META_APP_SECRET,
-      redirect_uri: process.env.META_REDIRECT_URI,
-      code,
-    });
+if (!response.ok || data.error || !data.access_token) {
+  console.error("Meta token exchange failed.");
+  return res.status(400).send(
+    "Meta token exchange failed. Check Render environment variables and logs."
+  );
+}
 
-    const response = await fetch(
-      "https://graph.facebook.com/v24.0/oauth/access_token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: params.toString(),
-      }
-    );
+metaAccessToken = data.access_token;
 
-    const data = await response.json();
+console.log("Meta access token received successfully.");
 
-    if (!response.ok || data.error || !data.access_token) {
-      console.error("Meta token exchange failed.");
-      return res
-        .status(400)
-        .send("Meta token exchange failed. Check Render logs.");
-    }
+return res.send(
+  "Meta access token received successfully. You can return to Instagram Agent."
+);
 
-    metaAccessToken = data.access_token;
+} catch (err) {
+console.error("OAuth callback error:", err.message);
 
-    console.log("Meta access token received successfully.");
+return res.status(500).send(
+  "Server error during Meta token exchange."
+);
 
-    res.send("Meta access token received successfully.");
-  } catch (err) {
-    console.error("OAuth callback error:", err.message);
-    res.status(500).send("Server error during Meta token exchange.");
-  }
+}
 });
 
 // Meta connection status
 app.get("/auth/meta/status", (req, res) => {
-  res.json({
-    connected: Boolean(metaAccessToken),
+res.json({
+connected: Boolean(metaAccessToken),
+});
+});
+
+// Check which permissions Meta granted
+app.get("/auth/meta/permissions", async (req, res) => {
+if (!metaAccessToken) {
+return res.status(401).json({
+connected: false,
+error: "Not connected to Meta. Authorize first.",
+});
+}
+
+try {
+const result = await metaGet("/me/permissions");
+
+if (!result.ok) {
+  return res.status(400).json({
+    error: "Could not retrieve Meta permissions.",
+    meta_error: result.data.error
+      ? {
+          message: result.data.error.message,
+          type: result.data.error.type,
+          code: result.data.error.code,
+        }
+      : undefined,
   });
+}
+
+return res.json(result.data);
+
+} catch (err) {
+console.error("Permission lookup error:", err.message);
+
+return res.status(500).json({
+  error: "Server error checking permissions.",
+});
+
+}
+});
+
+// List accessible Facebook Pages and their linked Instagram accounts
+app.get("/auth/meta/pages", async (req, res) => {
+if (!metaAccessToken) {
+return res.status(401).json({
+connected: false,
+error: "Not connected to Meta. Authorize first.",
+});
+}
+
+try {
+const result = await metaGet("/me/accounts", {
+fields: "id,name,tasks,instagram_business_account",
+});
+
+if (!result.ok) {
+  return res.status(400).json({
+    error: "Meta could not retrieve your Facebook Pages.",
+    meta_error: result.data.error
+      ? {
+          message: result.data.error.message,
+          type: result.data.error.type,
+          code: result.data.error.code,
+          subcode: result.data.error.error_subcode,
+        }
+      : undefined,
+  });
+}
+
+return res.json({
+  page_count: Array.isArray(result.data.data)
+    ? result.data.data.length
+    : 0,
+  data: result.data.data || [],
+  paging: result.data.paging || undefined,
+  message:
+    result.data.data?.length
+      ? "Pages retrieved. Check whether instagram_business_account appears for your Page."
+      : "Meta returned no Pages. Check granted permissions and your Facebook account's Page access.",
+});
+
+} catch (err) {
+console.error("Facebook Page lookup error:", err.message);
+
+return res.status(500).json({
+  error: "Server error checking Facebook Pages.",
+});
+
+}
 });
 
 // Instagram account lookup
 app.get("/auth/meta/instagram", async (req, res) => {
-  if (!metaAccessToken) {
-    return res.status(401).json({
-      connected: false,
-      error: "Not connected to Meta",
-    });
-  }
+if (!metaAccessToken) {
+return res.status(401).json({
+connected: false,
+error: "Not connected to Meta. Authorize first.",
+});
+}
 
-  try {
-    const url =
-      "https://graph.facebook.com/v24.0/me/accounts" +
-      "?fields=id,name,instagram_business_account" +
-      `&access_token=${encodeURIComponent(metaAccessToken)}`;
+try {
+const result = await metaGet("/me/accounts", {
+fields: "id,name,instagram_business_account,tasks",
+});
 
-    const response = await fetch(url);
-    const data = await response.json();
+if (!result.ok) {
+  return res.status(400).json({
+    error: "Instagram account lookup failed.",
+    meta_error: result.data.error
+      ? {
+          message: result.data.error.message,
+          type: result.data.error.type,
+          code: result.data.error.code,
+          subcode: result.data.error.error_subcode,
+        }
+      : undefined,
+  });
+}
 
-    if (!response.ok || data.error) {
-      console.error("Instagram account lookup failed.");
-      return res.status(400).json({
-        error: "Instagram account lookup failed.",
-      });
-    }
+const pages = result.data.data || [];
 
-    res.json(data);
-  } catch (err) {
-    console.error("Instagram lookup error:", err.message);
+const linkedPages = pages.map((page) => ({
+  page_id: page.id,
+  page_name: page.name,
+  tasks: page.tasks,
+  instagram_business_account:
+    page.instagram_business_account || null,
+}));
 
-    res.status(500).json({
-      error: "Server error during Instagram lookup.",
-    });
-  }
+const instagramAccounts = linkedPages
+  .filter((page) => page.instagram_business_account)
+  .map((page) => ({
+    page_id: page.page_id,
+    page_name: page.page_name,
+    instagram_business_account:
+      page.instagram_business_account,
+  }));
+
+return res.json({
+  page_count: pages.length,
+  linked_instagram_count: instagramAccounts.length,
+  pages: linkedPages,
+  instagram_accounts: instagramAccounts,
+  message:
+    instagramAccounts.length
+      ? "Linked Instagram account(s) found."
+      : pages.length
+        ? "Pages found, but none returned a linked Instagram professional account."
+        : "No Facebook Pages were returned. Check Meta permissions and Page access.",
+});
+
+} catch (err) {
+console.error("Instagram lookup error:", err.message);
+
+return res.status(500).json({
+  error: "Server error during Instagram lookup.",
+});
+
+}
 });
 
 // API status
 app.get("/api", (req, res) => {
-  res.json({
-    app: "Daily Frame Instagram Agent",
-    server: "online",
-    meta_connected: Boolean(metaAccessToken),
-  });
+res.json({
+app: "Daily Frame Instagram Agent",
+server: "online",
+meta_connected: Boolean(metaAccessToken),
+});
 });
 
 // Start server
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+console.log("Server running on port ${PORT}");
 });
