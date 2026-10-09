@@ -1,16 +1,12 @@
-// Home — Google Search Console verification
-app.get("/", (req, res) => {
-  res.status(200).send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="google-site-verification" content="QUKL6_b-IX3u5J9mf9UK1LdRbFvYhN_GuWsMEkN0Wds" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Daily Frame Instagram Agent</title>
-</head>
-<body>
-  <h1>Daily Frame Instagram Agent</h1>
-  <p>Service status: running</p>
-</body>
-</html>`);
-});
+{
+  "name": "daily-frame-instagram-server",
+  "version": "1.0.0",
+  "description": "Daily Frame Instagram Agent",
+  "main": "oauth.js",
+  "scripts": {
+    "start": "node oauth.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
