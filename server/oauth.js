@@ -181,9 +181,9 @@ document.getElementById('draftButton').addEventListener('click', async () => {
 
     const d = data.draft || {};
     preview.textContent = 'HEADLINE\n' + (d.headline || '') +
-      '\n\nCAPTION\n' + (d.caption || '') +
-      '\n\nIMAGE PROMPT\n' + (d.image_prompt || '') +
-      '\n\nFACT-CHECK NOTE\n' + (d.fact_check_note || '');
+      '\\n\\nCAPTION\\n' + (d.caption || '') +
+      '\\n\\nIMAGE PROMPT\\n' + (d.image_prompt || '') +
+      '\\n\\nFACT-CHECK NOTE\\n' + (d.fact_check_note || '');
     status.textContent = 'Draft generated. Review it before use. Nothing was published.';
     secretInput.value = '';
   } catch (err) {
