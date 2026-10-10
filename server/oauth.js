@@ -1,6 +1,10 @@
 const express = require("express");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
 let metaAccessToken = null;
 
@@ -18,17 +22,22 @@ app.get("/", (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Daily Frame Instagram Agent</title>
 <style>
-body{font-family:Arial;background:#10121a;color:#fff;margin:0;padding:24px}
+body{font-family:Arial;background:#10121a;color:#fff;margin:0;padding:20px}
 main{max-width:700px;margin:auto}
 h1{color:#c9a7ff}
 .card{background:#1d2030;padding:18px;border-radius:14px;margin:14px 0}
-a,button{display:inline-block;background:#805ad5;color:white;padding:12px 16px;border:0;border-radius:8px;text-decoration:none;margin:5px 0}
-p{color:#d6d6e0}
+a,button{display:inline-block;background:#805ad5;color:white;padding:12px 16px;border:0;border-radius:8px;text-decoration:none;margin:5px 0;cursor:pointer}
+input,textarea{box-sizing:border-box;width:100%;padding:12px;margin:8px 0;background:#10121a;color:white;border:1px solid #555;border-radius:8px}
+textarea{min-height:110px}
+button{font-size:16px}
+.small{color:#bdbdcc;font-size:13px}
 </style>
 </head>
-<body><main>
+<body>
+<main>
 <h1>Daily Frame</h1>
 <p>Instagram Agent Dashboard</p>
+
 <div class="card">
 <h2>Account Connection</h2>
 <p>Facebook Page: Daily Frame</p>
@@ -37,26 +46,81 @@ p{color:#d6d6e0}
 <p id="status">Checking Meta connection...</p>
 <a href="/auth/meta/login">Connect / Reconnect Meta</a>
 </div>
+
 <div class="card">
 <h2>Instagram Tools</h2>
 <a href="/auth/meta/instagram">Check Instagram Account</a><br>
 <a href="/auth/meta/pages">Check Facebook Pages</a><br>
 <a href="/auth/meta/permissions">Check Permissions</a>
 </div>
+
 <div class="card">
-<h2>Publishing</h2>
-<p>Publishing tools will be added after the dashboard connection is verified.</p>
+<h2>Publish a Photo</h2>
+<p class="small">Enter a publicly accessible HTTPS image URL and your caption.</p>
+<form id="publishForm">
+<label for="imageUrl">Public image URL</label>
+<input id="imageUrl" name="imageUrl" type="url"
+placeholder="https://example.com/photo.jpg" required>
+
+<label for="caption">Caption</label>
+<textarea id="caption" name="caption"
+placeholder="Write your Instagram caption..." maxlength="2200"></textarea>
+
+<button type="submit" id="publishButton">Publish Photo</button>
+</form>
+<p id="publishResult" role="status"></p>
 </div>
-<div class="card"><a href="/privacy">Privacy Policy</a></div>
+
+<div class="card">
+<a href="/privacy">Privacy Policy</a>
+</div>
 </main>
+
 <script>
 fetch('/auth/meta/status')
-.then(r=>r.json())
-.then(d=>document.getElementById('status').textContent =
+.then(r => r.json())
+.then(d => document.getElementById('status').textContent =
 d.connected ? 'Meta connection: Connected' : 'Meta connection: Not connected')
-.catch(()=>document.getElementById('status').textContent='Unable to check connection');
+.catch(() => document.getElementById('status').textContent =
+'Unable to check connection');
+
+document.getElementById('publishForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const button = document.getElementById('publishButton');
+  const result = document.getElementById('publishResult');
+
+  button.disabled = true;
+  button.textContent = 'Publishing...';
+  result.textContent = 'Please wait. Do not close this page.';
+
+  try {
+    const response = await fetch('/api/instagram/publish-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageUrl: document.getElementById('imageUrl').value.trim(),
+        caption: document.getElementById('caption').value.trim()
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Publishing failed.');
+    }
+
+    result.textContent = 'Published successfully! Media ID: ' + data.id;
+  } catch (err) {
+    result.textContent = 'Error: ' + err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Publish Photo';
+  }
+});
 </script>
-</body></html>`);
+</body>
+</html>`);
 });
 
 // Privacy Policy
@@ -64,7 +128,7 @@ app.get("/privacy", (req, res) => {
   res.send(`<h1>Privacy Policy</h1>
 <p>Daily Frame Instagram Agent provides features through services authorized by users.</p>
 <h2>Information</h2>
-<p>Depending on permissions, the app may access Page and Instagram account information, posts, comments, and messages.</p>
+<p>The app may access Facebook Page and Instagram account information and content required for requested features.</p>
 <h2>Use</h2>
 <p>Information is used to provide app features and is not sold.</p>
 <h2>Data deletion</h2>
@@ -74,8 +138,14 @@ app.get("/privacy", (req, res) => {
 
 // Meta Login
 app.get("/auth/meta/login", (req, res) => {
-  if (!process.env.META_APP_ID || !process.env.META_REDIRECT_URI) {
-    return res.status(500).send("Check Meta environment variables in Render.");
+  if (
+    !process.env.META_APP_ID ||
+    !process.env.META_APP_SECRET ||
+    !process.env.META_REDIRECT_URI
+  ) {
+    return res.status(500).send(
+      "Check META_APP_ID, META_APP_SECRET and META_REDIRECT_URI in Render."
+    );
   }
 
   const params = new URLSearchParams({
@@ -85,7 +155,9 @@ app.get("/auth/meta/login", (req, res) => {
     config_id: CONFIG_ID
   });
 
-  res.redirect("https://www.facebook.com/v24.0/dialog/oauth?" + params);
+  res.redirect(
+    "https://www.facebook.com/v24.0/dialog/oauth?" + params.toString()
+  );
 });
 
 // Meta OAuth Callback
@@ -95,6 +167,7 @@ app.get("/auth/meta/callback", async (req, res) => {
   if (error) {
     return res.status(400).send(String(error_description || error));
   }
+
   if (!code) {
     return res.status(400).send("No authorization code received.");
   }
@@ -109,7 +182,9 @@ app.get("/auth/meta/callback", async (req, res) => {
 
     const response = await fetch(GRAPH_API + "/oauth/access_token", {
       method: "POST",
-      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
       body: params.toString()
     });
 
@@ -117,19 +192,25 @@ app.get("/auth/meta/callback", async (req, res) => {
 
     if (!response.ok || !data.access_token) {
       console.error("Meta token exchange failed:", data.error?.message);
-      return res.status(400).send("Meta token exchange failed. Check Render logs.");
+      return res.status(400).send(
+        "Meta token exchange failed. Check Render logs."
+      );
     }
 
     metaAccessToken = data.access_token;
+
     console.log("Meta access token received successfully.");
-    res.send('Meta access token received successfully. <a href="/">Open Dashboard</a>');
+
+    res.send(
+      'Meta access token received successfully. <a href="/">Open Dashboard</a>'
+    );
   } catch (err) {
     console.error("Meta callback error:", err.message);
     res.status(500).send("Server error during Meta login.");
   }
 });
 
-// Meta API helper
+// Meta GET helper
 async function metaGet(path, params = {}) {
   if (!metaAccessToken) {
     throw new Error("Not connected to Meta. Reconnect first.");
@@ -139,7 +220,7 @@ async function metaGet(path, params = {}) {
   url.searchParams.set("access_token", metaAccessToken);
 
   for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value);
+    url.searchParams.set(key, String(value));
   }
 
   const response = await fetch(url);
@@ -152,45 +233,86 @@ async function metaGet(path, params = {}) {
   };
 }
 
+// Meta POST helper
+async function metaPost(path, params = {}) {
+  if (!metaAccessToken) {
+    throw new Error("Not connected to Meta. Reconnect first.");
+  }
+
+  const body = new URLSearchParams({
+    access_token: metaAccessToken
+  });
+
+  for (const [key, value] of Object.entries(params)) {
+    body.set(key, String(value));
+  }
+
+  const response = await fetch(GRAPH_API + path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body.toString()
+  });
+
+  const data = await response.json();
+
+  return {
+    ok: response.ok && !data.error,
+    status: response.status,
+    data
+  };
+}
+
 // Connection status
 app.get("/auth/meta/status", (req, res) => {
-  res.json({connected: Boolean(metaAccessToken)});
+  res.json({ connected: Boolean(metaAccessToken) });
 });
 
 // Permissions
 app.get("/auth/meta/permissions", async (req, res) => {
   if (!metaAccessToken) {
-    return res.status(401).json({connected: false, error: "Reconnect to Meta first."});
+    return res.status(401).json({
+      connected: false,
+      error: "Reconnect to Meta first."
+    });
   }
 
   try {
     const result = await metaGet("/me/permissions");
     res.status(result.ok ? 200 : 400).json(result.data);
   } catch (err) {
-    res.status(500).json({error: err.message});
+    res.status(500).json({ error: err.message });
   }
 });
 
 // Facebook Pages
 app.get("/auth/meta/pages", async (req, res) => {
   if (!metaAccessToken) {
-    return res.status(401).json({connected: false, error: "Reconnect to Meta first."});
+    return res.status(401).json({
+      connected: false,
+      error: "Reconnect to Meta first."
+    });
   }
 
   try {
     const result = await metaGet("/me/accounts", {
       fields: "id,name,tasks,instagram_business_account"
     });
+
     res.status(result.ok ? 200 : 400).json(result.data);
   } catch (err) {
-    res.status(500).json({error: err.message});
+    res.status(500).json({ error: err.message });
   }
 });
 
 // Instagram account lookup
 app.get("/auth/meta/instagram", async (req, res) => {
   if (!metaAccessToken) {
-    return res.status(401).json({connected: false, error: "Reconnect to Meta first."});
+    return res.status(401).json({
+      connected: false,
+      error: "Reconnect to Meta first."
+    });
   }
 
   try {
@@ -199,10 +321,13 @@ app.get("/auth/meta/instagram", async (req, res) => {
     });
 
     if (!result.ok) {
-      return res.status(400).json({error: result.data.error || "Instagram lookup failed."});
+      return res.status(400).json({
+        error: result.data.error || "Instagram lookup failed."
+      });
     }
 
     const pages = result.data.data || [];
+
     const accounts = pages
       .filter(p => p.instagram_business_account)
       .map(p => ({
@@ -218,7 +343,125 @@ app.get("/auth/meta/instagram", async (req, res) => {
       instagram_accounts: accounts
     });
   } catch (err) {
-    res.status(500).json({error: err.message});
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Publish an Instagram photo
+app.post("/api/instagram/publish-photo", async (req, res) => {
+  if (!metaAccessToken) {
+    return res.status(401).json({
+      error: "Meta is not connected. Tap Connect / Reconnect Meta first."
+    });
+  }
+
+  const imageUrl = String(req.body.imageUrl || "").trim();
+  const caption = String(req.body.caption || "").trim();
+
+  if (!imageUrl) {
+    return res.status(400).json({
+      error: "Please enter a public image URL."
+    });
+  }
+
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(imageUrl);
+  } catch {
+    return res.status(400).json({ error: "The image URL is invalid." });
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    return res.status(400).json({
+      error: "The image URL must start with https://."
+    });
+  }
+
+  if (caption.length > 2200) {
+    return res.status(400).json({
+      error: "The caption must be 2,200 characters or fewer."
+    });
+  }
+
+  try {
+    // Step 1: Ask Instagram to prepare the image.
+    const container = await metaPost("/" + IG_ID + "/media", {
+      image_url: imageUrl,
+      caption
+    });
+
+    if (!container.ok || !container.data.id) {
+      console.error("Instagram container error:", container.data.error);
+      return res.status(400).json({
+        error: container.data.error?.message ||
+          "Instagram could not prepare this image."
+      });
+    }
+
+    const creationId = container.data.id;
+
+    // Step 2: Wait for Instagram to finish processing the image.
+    let ready = false;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      const status = await metaGet("/" + creationId, {
+        fields: "status_code,status"
+      });
+
+      if (!status.ok) {
+        return res.status(400).json({
+          error: status.data.error?.message ||
+            "Could not check image processing status."
+        });
+      }
+
+      if (status.data.status_code === "FINISHED") {
+        ready = true;
+        break;
+      }
+
+      if (status.data.status_code === "ERROR" ||
+          status.data.status_code === "EXPIRED") {
+        return res.status(400).json({
+          error: status.data.status || "Instagram image processing failed."
+        });
+      }
+    }
+
+    if (!ready) {
+      return res.status(408).json({
+        error: "Instagram is still processing the image. Please try again later."
+      });
+    }
+
+    // Step 3: Publish the prepared image.
+    const published = await metaPost("/" + IG_ID + "/media_publish", {
+      creation_id: creationId
+    });
+
+    if (!published.ok || !published.data.id) {
+      console.error("Instagram publish error:", published.data.error);
+      return res.status(400).json({
+        error: published.data.error?.message ||
+          "Instagram could not publish the photo."
+      });
+    }
+
+    console.log("Instagram photo published:", published.data.id);
+
+    res.json({
+      success: true,
+      message: "Instagram photo published successfully.",
+      id: published.data.id
+    });
+  } catch (err) {
+    console.error("Instagram publishing error:", err.message);
+    res.status(500).json({
+      error: err.message || "Unexpected publishing error."
+    });
   }
 });
 
