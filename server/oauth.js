@@ -72,6 +72,21 @@ button{font-size:16px}
 </div>
 
 <div class="card">
+<h2>AI Draft Tester</h2>
+<p class="small">Generate a draft for review. Nothing is published.</p>
+<label for="agentSecret">Agent Secret</label>
+<input id="agentSecret" type="password" autocomplete="off" placeholder="Enter AGENT_CRON_SECRET">
+<label for="draftType">Content type</label>
+<select id="draftType" style="width:100%;padding:12px;margin:8px 0;background:#10121a;color:white;border:1px solid #555;border-radius:8px">
+<option value="news">World news draft</option>
+<option value="fact">Interesting fact draft</option>
+</select>
+<button type="button" id="draftButton">Generate Draft</button>
+<p id="draftStatus" role="status"></p>
+<div id="draftPreview" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
+</div>
+
+<div class="card">
 <h2>Publish a Photo</h2>
 <p class="small">Enter a publicly accessible HTTPS image URL and your caption.</p>
 <form id="publishForm">
@@ -135,6 +150,50 @@ document.getElementById('publishForm').addEventListener('submit', async e => {
     button.textContent = 'Publish Photo';
   }
 });
+document.getElementById('draftButton').addEventListener('click', async () => {
+  const secretInput = document.getElementById('agentSecret');
+  const button = document.getElementById('draftButton');
+  const status = document.getElementById('draftStatus');
+  const preview = document.getElementById('draftPreview');
+  const secret = secretInput.value.trim();
+  preview.textContent = '';
+
+  if (!secret) {
+    status.textContent = 'Enter your agent secret first.';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Generating...';
+  status.textContent = 'Generating draft. Please wait.';
+
+  try {
+    const response = await fetch('/api/agent/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + secret
+      },
+      body: JSON.stringify({ type: document.getElementById('draftType').value })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Draft generation failed.');
+
+    const d = data.draft || {};
+    preview.textContent = 'HEADLINE\n' + (d.headline || '') +
+      '\n\nCAPTION\n' + (d.caption || '') +
+      '\n\nIMAGE PROMPT\n' + (d.image_prompt || '') +
+      '\n\nFACT-CHECK NOTE\n' + (d.fact_check_note || '');
+    status.textContent = 'Draft generated. Review it before use. Nothing was published.';
+    secretInput.value = '';
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Generate Draft';
+  }
+});
+
 </script>
 </body>
 </html>`);
