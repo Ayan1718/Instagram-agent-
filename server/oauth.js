@@ -1,7 +1,17 @@
 const express = require("express");
+const OpenAI = require("openai");
+const cloudinary = require("cloudinary").v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -463,6 +473,19 @@ app.post("/api/instagram/publish-photo", async (req, res) => {
       error: err.message || "Unexpected publishing error."
     });
   }
+});
+
+// AI configuration status (never exposes secret values)
+app.get("/api/ai/status", (req, res) => {
+  res.json({
+    openai_configured: Boolean(process.env.OPENAI_API_KEY && openai),
+    cloudinary_configured: Boolean(
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    ),
+    auto_publishing_enabled: false
+  });
 });
 
 // API status
