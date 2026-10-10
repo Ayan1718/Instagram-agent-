@@ -7,19 +7,64 @@ let metaAccessToken = null;
 
 const GRAPH_API = "https://graph.facebook.com/v24.0";
 
-// Home page with Google Search Console verification
+// Home page
 app.get("/", (req, res) => {
   res.status(200).send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="google-site-verification" content="QUKL6_b-IX3u5J9mf9UK1LdRbFvYhN_GuWsMEkN0Wds" />
+  <meta name="google-site-verification" content="QUKL6_b-IX3u5J9mf9UK1LdRbFvYhN_GuWsMEkN0Wds">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Daily Frame Instagram Agent</title>
 </head>
 <body>
   <h1>Daily Frame Instagram Agent</h1>
   <p>Service status: running</p>
+  <p><a href="/privacy">Privacy Policy</a></p>
+</body>
+</html>`);
+});
+
+// Privacy Policy
+app.get("/privacy", (req, res) => {
+  res.status(200).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Daily Frame Agent</title>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p>Last updated: October 10, 2026</p>
+  <p>Daily Frame Agent provides Instagram management features
+  through services authorized by the user.</p>
+
+  <h2>Information We Access</h2>
+  <p>Depending on the permissions you grant, the app may access
+  Facebook Page and Instagram account information, posts, comments,
+  and messages required for its features.</p>
+
+  <h2>How Information Is Used</h2>
+  <p>Information is used to provide and maintain the app's features.
+  We do not sell personal information.</p>
+
+  <h2>Sharing and Security</h2>
+  <p>Information may be processed by Meta and service providers
+  necessary to operate the app. We take reasonable steps to protect
+  information and retain it only as needed for the stated purposes
+  and applicable legal requirements.</p>
+
+  <h2>Your Choices and Data Deletion</h2>
+  <p>You may revoke app permissions through your Meta account
+  settings. To request deletion of information associated with
+  the app, contact us using the email below.</p>
+
+  <h2>Children's Privacy</h2>
+  <p>This app is not intended for children under 13.</p>
+
+  <h2>Contact</h2>
+  <p>Email: ayandevalapur@gmail.com</p>
 </body>
 </html>`);
 });
