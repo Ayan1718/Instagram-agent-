@@ -180,7 +180,7 @@ document.getElementById('draftButton').addEventListener('click', async () => {
     if (!response.ok) throw new Error(data.error || 'Draft generation failed.');
 
     const d = data.draft || {};
-    preview.textContent = 'HEADLINE\n' + (d.headline || '') +
+    preview.textContent = 'HEADLINE\\n' + (d.headline || '') +
       '\\n\\nCAPTION\\n' + (d.caption || '') +
       '\\n\\nIMAGE PROMPT\\n' + (d.image_prompt || '') +
       '\\n\\nFACT-CHECK NOTE\\n' + (d.fact_check_note || '');
