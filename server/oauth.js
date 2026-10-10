@@ -16,6 +16,13 @@ cloudinary.config({
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+function validAgentSecret(req) {
+  const expected = process.env.AGENT_CRON_SECRET;
+  const supplied = req.get("authorization") || "";
+  return Boolean(expected && supplied === `Bearer ${expected}`);
+}
+
+
 let metaAccessToken = null;
 
 const GRAPH_API = "https://graph.facebook.com/v24.0";
@@ -472,6 +479,48 @@ app.post("/api/instagram/publish-photo", async (req, res) => {
     res.status(500).json({
       error: err.message || "Unexpected publishing error."
     });
+  }
+});
+
+
+// Protected AI content draft endpoint. Draft only; never publishes.
+app.post("/api/agent/draft", async (req, res) => {
+  if (!validAgentSecret(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!openai) {
+    return res.status(503).json({ error: "OpenAI is not configured." });
+  }
+
+  try {
+    const topicType = req.body?.type === "fact" ? "interesting fact" : "world news";
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You create accurate Instagram content for Daily Frame. For news, never invent breaking stories, dates, quotes, or sources. If current verified information is not provided, clearly label the output as a draft needing fact-checking. For facts, use well-established information and avoid dubious claims. Return valid JSON only."
+        },
+        {
+          role: "user",
+          content: `Create one Instagram ${topicType} draft. Return JSON with keys: headline, caption, image_prompt, fact_check_note. Make it engaging, concise, globally relevant, and do not invent a source.`
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7
+    });
+
+    const draft = JSON.parse(completion.choices[0].message.content || "{}");
+    return res.json({
+      success: true,
+      published: false,
+      type: topicType,
+      draft
+    });
+  } catch (err) {
+    console.error("AI draft error:", err.message);
+    return res.status(500).json({ error: "Could not generate draft." });
   }
 });
 
