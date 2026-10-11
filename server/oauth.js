@@ -78,6 +78,7 @@ button{font-size:16px}
 <input id="agentSecret" type="password" autocomplete="off" placeholder="Enter AGENT_CRON_SECRET">
 <label for="draftType">Content type</label>
 <select id="draftType" style="width:100%;padding:12px;margin:8px 0;background:#10121a;color:white;border:1px solid #555;border-radius:8px">
+<option value="india">India top news draft</option>
 <option value="news">World news draft</option>
 <option value="fact">Interesting fact draft</option>
 </select>
@@ -553,10 +554,17 @@ app.post("/api/agent/draft", async (req, res) => {
     }
 
     try {
-        const topicType = req.body?.type === "fact" ? "interesting fact" : "world news";
+        const requestedType = req.body?.type;
+        const topicType = requestedType === "fact" ? "interesting fact" :
+            requestedType === "india" ? "top India news" : "world news";
+        const regionInstruction = requestedType === "india"
+            ? "Focus on important developments in India."
+            : requestedType === "news"
+                ? "Focus on important international developments."
+                : "Focus on well-established, interesting facts.";
         const response = await gemini.models.generateContent({
             model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-            contents: `Create one Instagram ${topicType} draft for Daily Frame. Return valid JSON only with keys: headline, caption, image_prompt, fact_check_note. Make it engaging, concise, and globally relevant. Never invent breaking news, dates, quotes, or sources. If current verified information is not provided, clearly state that the news draft needs fact-checking. For facts, use well-established information and avoid dubious claims.`,
+            contents: `Create one Instagram ${topicType} draft for Daily Frame. ${regionInstruction} Return valid JSON only with keys: headline, caption, image_prompt, fact_check_note. Make it engaging and concise. Never invent breaking news, dates, quotes, statistics, or sources. You do not have live news verification in this request, so clearly state in fact_check_note that news claims and dates must be checked against current reliable sources before publication. For facts, use well-established information and avoid dubious claims.`,
             config: {
                 responseMimeType: "application/json",
                 temperature: 0.7
