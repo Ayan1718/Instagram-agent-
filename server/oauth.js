@@ -637,7 +637,7 @@ app.post("/api/agent/draft", async (req, res) => {
 
 // Free Wikimedia image search. Saves to Cloudinary; never publishes.
 app.post("/api/agent/generate-image", async (req, res) => {
-  if (!isValidAgentSecret(req)) {
+  if (!validAgentSecret(req)) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
