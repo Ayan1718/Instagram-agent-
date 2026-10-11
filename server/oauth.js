@@ -635,75 +635,89 @@ app.post("/api/agent/draft", async (req, res) => {
     }
 });
 
-// Protected AI image generation. Saves to Cloudinary; never publishes.
+// Free Wikimedia image search. Saves to Cloudinary; never publishes.
 app.post("/api/agent/generate-image", async (req, res) => {
-  if (!validAgentSecret(req)) {
+  if (!isValidAgentSecret(req)) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (!gemini) {
-    return res.status(503).json({ error: "Gemini is not configured." });
-  }
-
-  if (
-    !process.env.CLOUDINARY_CLOUD_NAME ||
-    !process.env.CLOUDINARY_API_KEY ||
-    !process.env.CLOUDINARY_API_SECRET
-  ) {
+  if (!process.env.CLOUDINARY_CLOUD_NAME ||
+      !process.env.CLOUDINARY_API_KEY ||
+      !process.env.CLOUDINARY_API_SECRET) {
     return res.status(503).json({ error: "Cloudinary is not configured." });
   }
 
   const prompt = typeof req.body?.prompt === "string"
-    ? req.body.prompt.trim()
-    : "";
+    ? req.body.prompt.trim() : "";
 
   if (!prompt || prompt.length > 4000) {
-    return res.status(400).json({
-      error: "Provide an image prompt of 1 to 4000 characters."
-    });
+    return res.status(400).json({ error: "Generate a draft first." });
   }
 
   try {
-    const response = await gemini.models.generateContent({
-      model: process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image",
-      contents: `Create one polished Instagram portrait image for Daily Frame. ${prompt}`,
-      config: {
-        responseModalities: ["IMAGE"],
-        responseFormat: {
-          image: {
-            aspectRatio: "4:5",
-            imageSize: "1K"
-          }
-        }
-      }
+    const words = prompt
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/[^\w\s-]/g, " ")
+      .split(/\s+/)
+      .filter(w => w.length > 2)
+      .slice(0, 8)
+      .join(" ");
+
+    const params = new URLSearchParams({
+      action: "query",
+      generator: "search",
+      gsrsearch: words || "nature",
+      gsrnamespace: "6",
+      gsrlimit: "10",
+      prop: "imageinfo",
+      iiprop: "url|mime|extmetadata",
+      iiurlwidth: "1200",
+      format: "json"
     });
 
-    const parts = response.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find(part => part.inlineData?.data);
+    const result = await fetch(
+      "https://commons.wikimedia.org/w/api.php?" + params,
+      { headers: { "User-Agent": "DailyFrameAgent/1.0" } }
+    );
 
-    if (!imagePart) {
-      throw new Error("The image model returned no image.");
+    if (!result.ok) throw new Error("Free image search unavailable.");
+
+    const data = await result.json();
+    const pages = Object.values(data.query?.pages || {});
+    const page = pages.find(p =>
+      p.imageinfo?.[0] &&
+      ["image/jpeg", "image/png", "image/webp"].includes(p.imageinfo[0].mime)
+    );
+
+    if (!page) {
+      return res.status(404).json({
+        error: "No matching stock image found. Try another draft."
+      });
     }
 
-    const mimeType = imagePart.inlineData.mimeType || "image/png";
+    const info = page.imageinfo[0];
     const uploaded = await cloudinary.uploader.upload(
-      `data:${mimeType};base64,${imagePart.inlineData.data}`,
-      {
-        folder: "daily-frame/generated",
-        resource_type: "image"
-      }
+      info.thumburl || info.url,
+      { folder: "daily-frame/stock", resource_type: "image" }
     );
+
+    const meta = info.extmetadata || {};
+    const clean = v => String(v || "").replace(/<[^>]*>/g, "").trim();
 
     return res.json({
       success: true,
       published: false,
       image_url: uploaded.secure_url,
-      public_id: uploaded.public_id
+      public_id: uploaded.public_id,
+      attribution: clean(meta.Artist?.value || "Creator not listed"),
+      license: clean(meta.LicenseShortName?.value || "Check source license"),
+      source_url: "https://commons.wikimedia.org/wiki/" +
+        encodeURIComponent(page.title.replace(/ /g, "_"))
     });
   } catch (err) {
-    console.error("Gemini image generation error:", err.message);
+    console.error("Stock image search error:", err.message);
     return res.status(500).json({
-      error: "Image generation or storage failed. Check the server logs."
+      error: "Could not find or save a stock image. Try again later."
     });
   }
 });
