@@ -555,7 +555,7 @@ app.post("/api/agent/draft", async (req, res) => {
     try {
         const topicType = req.body?.type === "fact" ? "interesting fact" : "world news";
         const response = await gemini.models.generateContent({
-            model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+            model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
             contents: `Create one Instagram ${topicType} draft for Daily Frame. Return valid JSON only with keys: headline, caption, image_prompt, fact_check_note. Make it engaging, concise, and globally relevant. Never invent breaking news, dates, quotes, or sources. If current verified information is not provided, clearly state that the news draft needs fact-checking. For facts, use well-established information and avoid dubious claims.`,
             config: {
                 responseMimeType: "application/json",
