@@ -7,6 +7,7 @@
     "start": "node oauth.js"
   },
   "dependencies": {
+    "@google/genai": "^2.28.0",
     "cloudinary": "^2.7.0",
     "express": "^4.21.2",
     "openai": "^5.20.0"

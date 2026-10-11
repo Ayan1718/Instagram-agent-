@@ -1,11 +1,11 @@
 const express = require("express");
-const OpenAI = require("openai");
+const { GoogleGenAI } = require("@google/genai");
 const cloudinary = require("cloudinary").v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -544,56 +544,49 @@ app.post("/api/instagram/publish-photo", async (req, res) => {
 
 // Protected AI content draft endpoint. Draft only; never publishes.
 app.post("/api/agent/draft", async (req, res) => {
-  if (!validAgentSecret(req)) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+    if (!validAgentSecret(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
 
-  if (!openai) {
-    return res.status(503).json({ error: "OpenAI is not configured." });
-  }
+    if (!gemini) {
+        return res.status(503).json({ error: "Gemini is not configured." });
+    }
 
-  try {
-    const topicType = req.body?.type === "fact" ? "interesting fact" : "world news";
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You create accurate Instagram content for Daily Frame. For news, never invent breaking stories, dates, quotes, or sources. If current verified information is not provided, clearly label the output as a draft needing fact-checking. For facts, use well-established information and avoid dubious claims. Return valid JSON only."
-        },
-        {
-          role: "user",
-          content: `Create one Instagram ${topicType} draft. Return JSON with keys: headline, caption, image_prompt, fact_check_note. Make it engaging, concise, globally relevant, and do not invent a source.`
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7
-    });
+    try {
+        const topicType = req.body?.type === "fact" ? "interesting fact" : "world news";
+        const response = await gemini.models.generateContent({
+            model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+            contents: `Create one Instagram ${topicType} draft for Daily Frame. Return valid JSON only with keys: headline, caption, image_prompt, fact_check_note. Make it engaging, concise, and globally relevant. Never invent breaking news, dates, quotes, or sources. If current verified information is not provided, clearly state that the news draft needs fact-checking. For facts, use well-established information and avoid dubious claims.`,
+            config: {
+                responseMimeType: "application/json",
+                temperature: 0.7
+            }
+        });
 
-    const draft = JSON.parse(completion.choices[0].message.content || "{}");
-    return res.json({
-      success: true,
-      published: false,
-      type: topicType,
-      draft
-    });
-  } catch (err) {
-    console.error("AI draft error:", err.message);
-    return res.status(500).json({ error: "Could not generate draft." });
-  }
+        const draft = JSON.parse(response.text || "{}");
+        return res.json({
+            success: true,
+            published: false,
+            type: topicType,
+            draft
+        });
+    } catch (err) {
+        console.error("Gemini draft error:", err.message);
+        return res.status(500).json({ error: "Could not generate draft." });
+    }
 });
 
 // AI configuration status (never exposes secret values)
 app.get("/api/ai/status", (req, res) => {
-  res.json({
-    openai_configured: Boolean(process.env.OPENAI_API_KEY && openai),
-    cloudinary_configured: Boolean(
-      process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-    ),
-    auto_publishing_enabled: false
-  });
+    res.json({
+        gemini_configured: Boolean(process.env.GEMINI_API_KEY && gemini),
+        cloudinary_configured: Boolean(
+            process.env.CLOUDINARY_CLOUD_NAME &&
+            process.env.CLOUDINARY_API_KEY &&
+            process.env.CLOUDINARY_API_SECRET
+        ),
+        auto_publishing_enabled: false
+    });
 });
 
 // API status
