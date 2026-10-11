@@ -85,6 +85,10 @@ button{font-size:16px}
 <button type="button" id="draftButton">Generate Draft</button>
 <p id="draftStatus" role="status"></p>
 <div id="draftPreview" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
+<button type="button" id="imageButton">Generate Image from Draft</button>
+<p id="imageStatus" role="status"></p>
+<img id="generatedImage" alt="Generated Instagram image" style="display:none;max-width:100%;border-radius:12px;margin-top:12px">
+
 </div>
 
 <div class="card">
@@ -151,6 +155,8 @@ document.getElementById('publishForm').addEventListener('submit', async e => {
     button.textContent = 'Publish Photo';
   }
 });
+let currentImagePrompt = '';
+
 document.getElementById('draftButton').addEventListener('click', async () => {
   const secretInput = document.getElementById('agentSecret');
   const button = document.getElementById('draftButton');
@@ -181,6 +187,7 @@ document.getElementById('draftButton').addEventListener('click', async () => {
     if (!response.ok) throw new Error(data.error || 'Draft generation failed.');
 
     const d = data.draft || {};
+    currentImagePrompt = d.image_prompt || '';
     preview.textContent = 'HEADLINE\\n' + (d.headline || '') +
       '\\n\\nCAPTION\\n' + (d.caption || '') +
       '\\n\\nIMAGE PROMPT\\n' + (d.image_prompt || '') +
@@ -192,6 +199,50 @@ document.getElementById('draftButton').addEventListener('click', async () => {
   } finally {
     button.disabled = false;
     button.textContent = 'Generate Draft';
+  }
+});
+
+
+document.getElementById('imageButton').addEventListener('click', async () => {
+  const secret = document.getElementById('agentSecret').value.trim();
+  const button = document.getElementById('imageButton');
+  const status = document.getElementById('imageStatus');
+  const image = document.getElementById('generatedImage');
+
+  if (!secret) {
+    status.textContent = 'Enter your agent secret first.';
+    return;
+  }
+  if (!currentImagePrompt) {
+    status.textContent = 'Generate a draft first.';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Generating image...';
+  status.textContent = 'Generating and saving image. Please wait.';
+  image.style.display = 'none';
+
+  try {
+    const response = await fetch('/api/agent/generate-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + secret
+      },
+      body: JSON.stringify({ prompt: currentImagePrompt })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Image generation failed.');
+
+    image.src = data.image_url;
+    image.style.display = 'block';
+    status.textContent = 'Image saved to Cloudinary. Nothing was published.';
+  } catch (error) {
+    status.textContent = 'Error: ' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Generate Image from Draft';
   }
 });
 
@@ -582,6 +633,79 @@ app.post("/api/agent/draft", async (req, res) => {
         console.error("Gemini draft error:", err.message);
         return res.status(500).json({ error: "Could not generate draft." });
     }
+});
+
+// Protected AI image generation. Saves to Cloudinary; never publishes.
+app.post("/api/agent/generate-image", async (req, res) => {
+  if (!validAgentSecret(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!gemini) {
+    return res.status(503).json({ error: "Gemini is not configured." });
+  }
+
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
+    return res.status(503).json({ error: "Cloudinary is not configured." });
+  }
+
+  const prompt = typeof req.body?.prompt === "string"
+    ? req.body.prompt.trim()
+    : "";
+
+  if (!prompt || prompt.length > 4000) {
+    return res.status(400).json({
+      error: "Provide an image prompt of 1 to 4000 characters."
+    });
+  }
+
+  try {
+    const response = await gemini.models.generateContent({
+      model: process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image",
+      contents: `Create one polished Instagram portrait image for Daily Frame. ${prompt}`,
+      config: {
+        responseModalities: ["IMAGE"],
+        responseFormat: {
+          image: {
+            aspectRatio: "4:5",
+            imageSize: "1K"
+          }
+        }
+      }
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find(part => part.inlineData?.data);
+
+    if (!imagePart) {
+      throw new Error("The image model returned no image.");
+    }
+
+    const mimeType = imagePart.inlineData.mimeType || "image/png";
+    const uploaded = await cloudinary.uploader.upload(
+      `data:${mimeType};base64,${imagePart.inlineData.data}`,
+      {
+        folder: "daily-frame/generated",
+        resource_type: "image"
+      }
+    );
+
+    return res.json({
+      success: true,
+      published: false,
+      image_url: uploaded.secure_url,
+      public_id: uploaded.public_id
+    });
+  } catch (err) {
+    console.error("Gemini image generation error:", err.message);
+    return res.status(500).json({
+      error: "Image generation or storage failed. Check the server logs."
+    });
+  }
 });
 
 // AI configuration status (never exposes secret values)
