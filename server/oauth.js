@@ -660,7 +660,7 @@ app.post("/api/agent/generate-image", async (req, res) => {
       .replace(/[^\w\s-]/g, " ")
       .split(/\s+/)
       .filter(w => w.length > 2)
-      .slice(0, 8)
+      .slice(0, 3)
       .join(" ");
 
     const params = new URLSearchParams({
