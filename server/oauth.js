@@ -659,7 +659,7 @@ app.post("/api/agent/generate-image", async (req, res) => {
       .replace(/https?:\/\/\S+/g, "")
       .replace(/[^\w\s-]/g, " ")
       .split(/\s+/)
-      .filter(w => w.length > 2)
+      .filter(w => w.length > 2 && !["the","and","with","for","from","this","that","are","how","why"].includes(w.toLowerCase()))
       .slice(0, 3)
       .join(" ");
 
