@@ -28,4 +28,17 @@ async function connectCanva(accessToken) {
   return client;
 }
 
-module.exports = { connectCanva };
+async function listCanvaTools(accessToken) {
+  const client = await connectCanva(accessToken);
+  try {
+    const result = await client.listTools();
+    return result.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+    }));
+  } finally {
+    await client.close();
+  }
+}
+
+module.exports = { connectCanva, listCanvaTools };
