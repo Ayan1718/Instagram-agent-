@@ -126,10 +126,11 @@ function registerCanvaOAuth(app) {
       const tokens = await response.json();
 
       if (!response.ok || !tokens.access_token) {
-        console.error(
-          "Canva token exchange failed with status:",
-          response.status
-        );
+        console.error("Canva token exchange failed:", response.status, {
+        error: tokens.error,
+        error_description: tokens.error_description,
+        message: tokens.message,
+    });
         return res.status(502).send(
           "Canva token exchange failed. Check the server logs and app settings."
         );
