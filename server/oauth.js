@@ -793,7 +793,7 @@ app.get("/api/canva/help", async (req, res) => {
         const session = await getCanvaSession("daily-frame-canva");
         const token = session && session.tokens && session.tokens.access_token;
         if (!token) return res.status(401).json({error: "Canva access token missing"});
-        const result = await callCanvaTool(token, "help", {});
+        const result = await callCanvaTool(token, "help", { prompt: "Explain which Canva MCP tools can create a 1080 x 1350 Instagram feed design with a headline and image, and show the required arguments for those tools." });
         return res.json({connected: true, result});
     } catch (e) {
         console.error("Canva help test failed:", e.message);
