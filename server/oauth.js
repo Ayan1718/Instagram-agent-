@@ -87,6 +87,8 @@ button{font-size:16px}
 <p id="draftStatus" role="status"></p>
 <div id="draftPreview" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
 <button type="button" id="imageButton">Generate Image from Draft</button>
+<button type="button" id="canvaToolsButton">Test Canva Tools</button>
+<p id="canvaToolsStatus"></p>
 <p id="imageStatus" role="status"></p>
 <img id="generatedImage" alt="Generated Instagram image" style="display:none;max-width:100%;border-radius:12px;margin-top:12px">
 
@@ -204,6 +206,18 @@ document.getElementById('draftButton').addEventListener('click', async () => {
 });
 
 
+document.getElementById('canvaToolsButton').addEventListener('click', async () => {
+  const secret = document.getElementById('agentSecret').value.trim();
+  const status = document.getElementById('canvaToolsStatus');
+  if (!secret) { status.textContent = 'Enter your agent secret first.'; return; }
+  status.textContent = 'Checking Canva...';
+  try {
+    const r = await fetch('/api/canva/tools', {headers: {'Authorization': 'Bearer ' + secret}});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Check failed');
+    status.textContent = 'Canva tools: ' + d.tools.map(t => t.name).join(', ');
+  } catch (e) { status.textContent = 'Error: ' + e.message; }
+});
 document.getElementById('imageButton').addEventListener('click', async () => {
   const secret = document.getElementById('agentSecret').value.trim();
   const button = document.getElementById('imageButton');
