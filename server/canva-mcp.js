@@ -41,4 +41,10 @@ async function listCanvaTools(accessToken) {
   }
 }
 
-module.exports = { connectCanva, listCanvaTools };
+async function callCanvaTool(accessToken, name, args = {}) {
+  const client = await connectCanva(accessToken);
+  try { return await client.callTool({ name, arguments: args }); }
+  finally { await client.close(); }
+}
+
+module.exports = { connectCanva, listCanvaTools, callCanvaTool };

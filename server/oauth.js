@@ -761,6 +761,22 @@ app.get("/api", (req, res) => {
   });
 });
 
+app.get("/api/canva/help", async (req, res) => {
+    if (!validAgentSecret(req)) return res.status(401).json({error: "Unauthorized"});
+    try {
+        const {getCanvaSession} = require("./canva-db");
+        const {callCanvaTool} = require("./canva-mcp");
+        const session = await getCanvaSession("daily-frame-canva");
+        const token = session && session.tokens && session.tokens.access_token;
+        if (!token) return res.status(401).json({error: "Canva access token missing"});
+        const result = await callCanvaTool(token, "help", {});
+        return res.json({connected: true, result});
+    } catch (e) {
+        console.error("Canva help test failed:", e.message);
+        return res.status(500).json({error: "Canva help test failed; check server logs"});
+    }
+});
+
 app.get("/api/canva/tools", async (req, res) => {
     if (!validAgentSecret(req)) return res.status(401).json({error:"Unauthorized"});
     try {
