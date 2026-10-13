@@ -41,10 +41,26 @@ async function listCanvaTools(accessToken) {
   }
 }
 
+async function getCanvaToolSchema(accessToken, name) {
+  const client = await connectCanva(accessToken);
+  try {
+    const result = await client.listTools();
+    const tool = result.tools.find((item) => item.name === name);
+    if (!tool) return null;
+    return {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    };
+  } finally {
+    await client.close();
+  }
+}
+
 async function callCanvaTool(accessToken, name, args = {}) {
   const client = await connectCanva(accessToken);
   try { return await client.callTool({ name, arguments: args }); }
   finally { await client.close(); }
 }
 
-module.exports = { connectCanva, listCanvaTools, callCanvaTool };
+module.exports = { connectCanva, listCanvaTools, callCanvaTool, getCanvaToolSchema };

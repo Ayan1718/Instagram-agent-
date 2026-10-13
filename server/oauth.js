@@ -801,6 +801,24 @@ app.get("/api/canva/help", async (req, res) => {
     }
 });
 
+app.get("/api/canva/tool-schema", async (req, res) => {
+  if (!validAgentSecret(req)) return res.status(401).json({error: "Unauthorized"});
+  try {
+    const name = String(req.query.name || "generate-design");
+    const {getCanvaSession} = require("./canva-db");
+    const {getCanvaToolSchema} = require("./canva-mcp");
+    const session = await getCanvaSession("daily-frame-canva");
+    const token = session && session.tokens && session.tokens.access_token;
+    if (!token) return res.status(401).json({error: "Canva access token missing"});
+    const schema = await getCanvaToolSchema(token, name);
+    if (!schema) return res.status(404).json({error: "Canva tool not found"});
+    return res.json(schema);
+  } catch (e) {
+    console.error("Canva tool schema check failed:", e.message);
+    return res.status(500).json({error: "Canva tool schema check failed; check server logs"});
+  }
+});
+
 app.get("/api/canva/tools", async (req, res) => {
     if (!validAgentSecret(req)) return res.status(401).json({error:"Unauthorized"});
     try {
