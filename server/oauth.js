@@ -747,6 +747,22 @@ app.get("/api", (req, res) => {
   });
 });
 
+app.get("/api/canva/tools", async (req, res) => {
+    if (!validAgentSecret(req)) return res.status(401).json({error:"Unauthorized"});
+    try {
+        const {getCanvaSession} = require("./canva-db");
+        const {listCanvaTools} = require("./canva-mcp");
+        const session = await getCanvaSession("daily-frame-canva");
+        const token = session && session.tokens && session.tokens.access_token;
+        if (!token) return res.status(401).json({error:"Canva session or access token missing"});
+        const tools = await listCanvaTools(token);
+        return res.json({connected:true, tools});
+    } catch (e) {
+        console.error("Canva tools check failed:", e.message);
+        return res.status(500).json({error:"Canva tools check failed; check server logs"});
+    }
+});
+
 registerCanvaOAuth(app);
 
 app.listen(PORT, "0.0.0.0", () => {
