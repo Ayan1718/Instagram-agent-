@@ -1,6 +1,7 @@
 const express = require("express");
 const { GoogleGenAI } = require("@google/genai");
 const cloudinary = require("cloudinary").v2;
+const { registerCanvaOAuth } = require("./canva-oauth");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -745,6 +746,8 @@ app.get("/api", (req, res) => {
     instagram_id: IG_ID
   });
 });
+
+registerCanvaOAuth(app);
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Server running on port " + PORT);
