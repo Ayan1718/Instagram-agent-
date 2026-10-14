@@ -89,6 +89,8 @@ button{font-size:16px}
 <button type="button" id="imageButton">Generate Image from Draft</button>
 <button type="button" id="canvaToolsButton">Test Canva Tools</button>
 <p id="canvaToolsStatus"></p>
+<button type="button" id="canvaSchemaButton">Inspect Generate Design Schema</button>
+<p id="canvaSchemaStatus"></p>
 <button type="button" id="canvaHelpButton">Test Canva Help</button>
 <p id="canvaHelpStatus"></p>
 <p id="imageStatus" role="status"></p>
@@ -207,6 +209,27 @@ document.getElementById('draftButton').addEventListener('click', async () => {
   }
 });
 
+
+document.getElementById('canvaSchemaButton').addEventListener('click', async () => {
+  const secret = document.getElementById('agentSecret').value.trim();
+  const status = document.getElementById('canvaSchemaStatus');
+  if (!secret) {
+    status.textContent = 'Enter your agent secret first.';
+    return;
+  }
+  status.textContent = 'Inspecting generate-design schema...';
+  try {
+    const r = await fetch('/api/canva/tool-schema?name=generate-design', {
+      headers: { Authorization: 'Bearer ' + secret }
+    });
+    const d = await r.json();
+    status.textContent = r.ok
+      ? JSON.stringify(d, null, 2)
+      : 'Error: ' + (d.error || 'Request failed');
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+});
 
 document.getElementById('canvaToolsButton').addEventListener('click', async () => {
   const secret = document.getElementById('agentSecret').value.trim();
