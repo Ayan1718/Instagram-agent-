@@ -865,9 +865,14 @@ app.post("/api/agent/generate-image", async (req, res) => {
       });
       const result = await fetch(
         "https://commons.wikimedia.org/w/api.php?" + params,
-        { headers: { "User-Agent": "DailyFrameAgent/1.0" } }
+        { headers: {
+          "User-Agent": "DailyFrameAgent/1.0 (https://github.com/Ayan1718/Instagram-agent-)",
+          "Accept": "application/json"
+        } }
       );
-      if (!result.ok) throw new Error("Free image search unavailable.");
+      if (!result.ok) {
+        throw new Error(`Free image search unavailable (HTTP ${result.status}).`);
+      }
 
       const data = await result.json();
       page = Object.values(data.query?.pages || {}).find(p =>
