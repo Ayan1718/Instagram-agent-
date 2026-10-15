@@ -95,6 +95,7 @@ button{font-size:16px}
 <p id="canvaHelpStatus"></p>
 <p id="imageStatus" role="status"></p>
 <img id="generatedImage" alt="Generated Instagram image" style="display:none;max-width:100%;border-radius:12px;margin-top:12px">
+<div id="posterSection" style="display:none;margin-top:16px"><h3>Daily Frame Poster Preview</h3><canvas id="posterCanvas" width="1080" height="1350" style="display:block;width:100%;height:auto;border-radius:12px;background:#10121a"></canvas><button type="button" id="downloadPosterButton">Download Poster PNG</button></div>
 
 </div>
 
@@ -163,6 +164,8 @@ document.getElementById('publishForm').addEventListener('submit', async e => {
   }
 });
 let currentImagePrompt = '';
+let currentDraftHeadline = '';
+let currentDraftSource = '';
 
 document.getElementById('draftButton').addEventListener('click', async () => {
   const secretInput = document.getElementById('agentSecret');
@@ -195,10 +198,13 @@ document.getElementById('draftButton').addEventListener('click', async () => {
 
     const d = data.draft || {};
     currentImagePrompt = d.image_prompt || '';
+    currentDraftHeadline = d.headline || '';
+currentDraftSource = d.source || '';
     preview.textContent = 'HEADLINE\\n' + (d.headline || '') +
       '\\n\\nCAPTION\\n' + (d.caption || '') +
       '\\n\\nIMAGE PROMPT\\n' + (d.image_prompt || '') +
-      '\\n\\nFACT-CHECK NOTE\\n' + (d.fact_check_note || '');
+              '\n\nSOURCE (VERIFY BEFORE USE)\n' + (d.source || 'No source supplied; verify independently.') +
+              '\n\nFACT-CHECK NOTE\n' + (d.fact_check_note || '');
     status.textContent = 'Draft generated. Review it before use. Nothing was published.';
     secretInput.value = '';
   } catch (err) {
@@ -265,6 +271,103 @@ document.getElementById('canvaHelpButton').onclick = async function () {
   }
 };
 
+
+function drawDailyFramePoster() {
+  const canvas = document.getElementById('posterCanvas');
+  const ctx = canvas.getContext('2d');
+  const image = document.getElementById('generatedImage');
+
+  ctx.fillStyle = '#10121a';
+  ctx.fillRect(0, 0, 1080, 1350);
+
+  if (image.complete && image.naturalWidth > 0) {
+    ctx.drawImage(image, 0, 0, 1080, 1350);
+  }
+
+  const gradient = ctx.createLinearGradient(0, 350, 0, 1350);
+  gradient.addColorStop(0, 'rgba(10,12,22,0.05)');
+  gradient.addColorStop(1, 'rgba(10,12,22,0.97)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 1080, 1350);
+
+  ctx.fillStyle = '#d8c4ff';
+  ctx.font = 'bold 38px Arial';
+  ctx.fillText('DAILY FRAME', 70, 100);
+
+  const headline = (currentDraftHeadline || 'Ideas worth sharing')
+    .replace(/\s+/g, ' ').trim();
+  const maxWidth = 940;
+  const maxLines = 4;
+  let fontSize = 70;
+  let lines = [];
+
+  function wrapHeadline(size) {
+    ctx.font = 'bold ' + size + 'px Arial';
+    const result = [];
+
+    for (const word of headline.split(' ')) {
+      let remaining = word;
+      while (remaining && ctx.measureText(remaining).width > maxWidth) {
+        let cut = 1;
+        while (
+          cut < remaining.length &&
+          ctx.measureText(remaining.slice(0, cut + 1)).width <= maxWidth
+        ) cut++;
+        result.push(remaining.slice(0, cut));
+        remaining = remaining.slice(cut);
+      }
+
+      if (!remaining) continue;
+      const last = result.length ? result[result.length - 1] : '';
+      if (last && !last.includes(' ') &&
+          result.length > 0 && result[result.length - 1] === last &&
+          ctx.measureText(last + ' ' + remaining).width <= maxWidth) {
+        result[result.length - 1] = last + ' ' + remaining;
+      } else {
+        result.push(remaining);
+      }
+    }
+    return result;
+  }
+
+  while (fontSize > 38) {
+    lines = wrapHeadline(fontSize);
+    if (lines.length <= maxLines) break;
+    fontSize -= 4;
+  }
+
+  lines = wrapHeadline(fontSize).slice(0, maxLines);
+  if (wrapHeadline(fontSize).length > maxLines && lines.length) {
+    let last = lines[lines.length - 1];
+    while (last && ctx.measureText(last + '…').width > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    lines[lines.length - 1] = last.trimEnd() + '…';
+  }
+
+  ctx.font = 'bold ' + fontSize + 'px Arial';
+  ctx.fillStyle = '#ffffff';
+  const lineHeight = fontSize + 18;
+  const startY = 1110 - (lines.length - 1) * lineHeight;
+  lines.forEach((text, i) =>
+    ctx.fillText(text, 70, startY + i * lineHeight, maxWidth)
+  );
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px Arial';
+    const posterSource = currentDraftSource || 'Source not supplied; verify before sharing';
+    ctx.fillText('Source: ' + posterSource.slice(0, 75), 70, 1225, 940);
+  ctx.fillStyle = '#d8c4ff';
+  ctx.font = '30px Arial';
+  ctx.fillText('POVs, ideas & things worth sharing', 70, 1280);
+}
+document.getElementById('downloadPosterButton').addEventListener('click', () => {
+  drawDailyFramePoster();
+  const link = document.createElement('a');
+  link.download = 'daily-frame-poster.png';
+  link.href = document.getElementById('posterCanvas').toDataURL('image/png');
+  link.click();
+});
 document.getElementById('imageButton').addEventListener('click', async () => {
   const secret = document.getElementById('agentSecret').value.trim();
   const button = document.getElementById('imageButton');
@@ -297,6 +400,14 @@ document.getElementById('imageButton').addEventListener('click', async () => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Image generation failed.');
 
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      drawDailyFramePoster();
+      document.getElementById('posterSection').style.display = 'block';
+    };
+    image.onerror = () => {
+      status.textContent = 'Image failed to load. Check the image URL and image-host CORS settings.';
+    };
     image.src = data.image_url;
     image.style.display = 'block';
     status.textContent = 'Image saved to Cloudinary. Nothing was published.';
@@ -677,7 +788,7 @@ app.post("/api/agent/draft", async (req, res) => {
                 : "Focus on well-established, interesting facts.";
         const response = await gemini.models.generateContent({
             model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-            contents: `Create one Instagram ${topicType} draft for Daily Frame. ${regionInstruction} Return valid JSON only with keys: headline, caption, image_prompt, fact_check_note. Make it engaging and concise. Never invent breaking news, dates, quotes, statistics, or sources. You do not have live news verification in this request, so clearly state in fact_check_note that news claims and dates must be checked against current reliable sources before publication. For facts, use well-established information and avoid dubious claims.`,
+            contents: `Create one Instagram ${topicType} draft for Daily Frame. ${regionInstruction} Return valid JSON only with keys: headline, caption, image_prompt, source, fact_check_note. In source, provide the exact reliable source name and direct URL only if you genuinely know them; otherwise use an empty string. Never invent URLs or sources. Mark all sources and factual claims as requiring verification before publication. Make it engaging and concise. Never invent breaking news, dates, quotes, statistics, or sources. You do not have live news verification in this request, so clearly state in fact_check_note that news claims and dates must be checked against current reliable sources before publication. For facts, use well-established information and avoid dubious claims.`,
             config: {
                 responseMimeType: "application/json",
                 temperature: 0.7
