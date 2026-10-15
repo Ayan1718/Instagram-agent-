@@ -203,8 +203,8 @@ currentDraftSource = d.source || '';
     preview.textContent = 'HEADLINE\\n' + (d.headline || '') +
       '\\n\\nCAPTION\\n' + (d.caption || '') +
       '\\n\\nIMAGE PROMPT\\n' + (d.image_prompt || '') +
-              '\n\nSOURCE (VERIFY BEFORE USE)\n' + (d.source || 'No source supplied; verify independently.') +
-              '\n\nFACT-CHECK NOTE\n' + (d.fact_check_note || '');
+              '\\n\\nSOURCE (VERIFY BEFORE USE)\\n' + (d.source || 'No source supplied; verify independently.') +
+              '\\n\\nFACT-CHECK NOTE\\n' + (d.fact_check_note || '');
     status.textContent = 'Draft generated. Review it before use. Nothing was published.';
     secretInput.value = '';
   } catch (err) {
