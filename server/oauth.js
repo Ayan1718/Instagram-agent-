@@ -884,10 +884,10 @@ app.post("/api/agent/generate-image", async (req, res) => {
     }
 
     const info = page.imageinfo[0];
-    const uploaded = await cloudinary.uploader.upload(
-      info.thumburl || info.url,
-      { folder: "daily-frame/stock", resource_type: "image" }
-    );
+    const imageUrl = info.thumburl || info.url;
+    if (!imageUrl || !/^https:\/\//i.test(imageUrl)) {
+      throw new Error("Wikimedia returned an invalid image URL.");
+    }
 
     const meta = info.extmetadata || {};
     const clean = v => String(v || "").replace(/<[^>]*>/g, "").trim();
@@ -895,8 +895,8 @@ app.post("/api/agent/generate-image", async (req, res) => {
     return res.json({
       success: true,
       published: false,
-      image_url: uploaded.secure_url,
-      public_id: uploaded.public_id,
+      image_url: imageUrl,
+      public_id: null,
       attribution: clean(meta.Artist?.value || "Creator not listed"),
       license: clean(meta.LicenseShortName?.value || "Check source license"),
       source_url: "https://commons.wikimedia.org/wiki/" +
