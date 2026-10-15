@@ -828,43 +828,58 @@ app.post("/api/agent/generate-image", async (req, res) => {
   }
 
   try {
+    const ignored = new Set([
+      "the","and","with","for","from","this","that","are","how","why",
+      "modern","minimalist","graphic","design","representing","featuring",
+      "subtle","accents","upward","trending","abstract","professional",
+      "typography","instagram","image","photo","visual","poster","background"
+    ]);
     const words = prompt
       .replace(/https?:\/\/\S+/g, "")
       .replace(/[^\w\s-]/g, " ")
       .split(/\s+/)
-      .filter(w => w.length > 2 && !["the","and","with","for","from","this","that","are","how","why"].includes(w.toLowerCase()))
-      .slice(0, 3)
+      .filter(w => w.length > 2 && !ignored.has(w.toLowerCase()))
+      .slice(0, 5)
       .join(" ");
 
-    const params = new URLSearchParams({
-      action: "query",
-      generator: "search",
-      gsrsearch: words || "nature",
-      gsrnamespace: "6",
-      gsrlimit: "10",
-      prop: "imageinfo",
-      iiprop: "url|mime|extmetadata",
-      iiurlwidth: "1200",
-      format: "json"
-    });
+    const terms = [...new Set([
+      words,
+      words ? words + " photograph" : "",
+      "India economy",
+      "economic growth",
+      "India"
+    ].filter(Boolean))];
+    let page = null;
 
-    const result = await fetch(
-      "https://commons.wikimedia.org/w/api.php?" + params,
-      { headers: { "User-Agent": "DailyFrameAgent/1.0" } }
-    );
+    for (const term of terms) {
+      const params = new URLSearchParams({
+        action: "query",
+        generator: "search",
+        gsrsearch: term,
+        gsrnamespace: "6",
+        gsrlimit: "10",
+        prop: "imageinfo",
+        iiprop: "url|mime|extmetadata",
+        iiurlwidth: "1200",
+        format: "json"
+      });
+      const result = await fetch(
+        "https://commons.wikimedia.org/w/api.php?" + params,
+        { headers: { "User-Agent": "DailyFrameAgent/1.0" } }
+      );
+      if (!result.ok) throw new Error("Free image search unavailable.");
 
-    if (!result.ok) throw new Error("Free image search unavailable.");
-
-    const data = await result.json();
-    const pages = Object.values(data.query?.pages || {});
-    const page = pages.find(p =>
-      p.imageinfo?.[0] &&
-      ["image/jpeg", "image/png", "image/webp"].includes(p.imageinfo[0].mime)
-    );
+      const data = await result.json();
+      page = Object.values(data.query?.pages || {}).find(p =>
+        p.imageinfo?.[0] &&
+        ["image/jpeg", "image/png", "image/webp"].includes(p.imageinfo[0].mime)
+      );
+      if (page) break;
+    }
 
     if (!page) {
       return res.status(404).json({
-        error: "No matching stock image found. Try another draft."
+        error: "No suitable Wikimedia image found after trying several search terms."
       });
     }
 
