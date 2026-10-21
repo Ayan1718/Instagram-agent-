@@ -158,6 +158,62 @@ function registerCanvaOAuth(app) {
       );
     }
   });
+
+  app.get("/auth/canva/mcp/login", async (req, res) => {
+    try {
+      const { listCanvaTools } = require("./canva-mcp");
+      await listCanvaTools();
+      return res.redirect("/");
+    } catch (error) {
+      console.error("Canva MCP login setup failed:", error.message);
+
+      try {
+        const { getCanvaMcpAuthorizationUrl } = require("./canva-mcp");
+        const url = await getCanvaMcpAuthorizationUrl();
+        if (url) return res.redirect(url);
+      } catch (lookupError) {
+        console.error(
+          "Canva MCP authorization URL lookup failed:",
+          lookupError.message
+        );
+      }
+
+      return res.status(502).send(
+        "Could not start Canva MCP authorization. Check server logs."
+      );
+    }
+  });
+
+  app.get("/auth/canva/mcp/callback", async (req, res) => {
+    const { code, state, error } = req.query;
+
+    if (error) {
+      return res.status(400).send(
+        "Canva MCP authorization was cancelled or denied."
+      );
+    }
+
+    if (typeof code !== "string" || typeof state !== "string") {
+      return res.status(400).send(
+        "Canva MCP callback is missing its code or state."
+      );
+    }
+
+    try {
+      const { finishCanvaMcpOAuth } = require("./canva-mcp");
+      await finishCanvaMcpOAuth(code, state);
+
+      return res.send(
+        'Canva MCP connected successfully. <a href="/">Open Dashboard</a>'
+      );
+    } catch (error) {
+      console.error("Canva MCP callback failed:", error.message);
+      return res.status(400).send(
+        "Canva MCP authorization failed. Return to the Dashboard and retry."
+      );
+    }
+  });
+
 }
 
 module.exports = { registerCanvaOAuth };

@@ -87,6 +87,7 @@ button{font-size:16px}
 <p id="draftStatus" role="status"></p>
 <div id="draftPreview" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
 <button type="button" id="imageButton">Generate Image from Draft</button>
+<a href="/auth/canva/mcp/login">Connect Canva MCP</a><br>
 <button type="button" id="canvaToolsButton">Test Canva Tools</button>
 <p id="canvaToolsStatus"></p>
 <button type="button" id="canvaSchemaButton">Inspect Generate Design Schema</button>
@@ -96,6 +97,25 @@ button{font-size:16px}
 <p id="imageStatus" role="status"></p>
 <img id="generatedImage" alt="Generated Instagram image" style="display:none;max-width:100%;border-radius:12px;margin-top:12px">
 <div id="posterSection" style="display:none;margin-top:16px"><h3>Daily Frame Poster Preview</h3><canvas id="posterCanvas" width="1080" height="1350" style="display:block;width:100%;height:auto;border-radius:12px;background:#10121a"></canvas><button type="button" id="downloadPosterButton">Download Poster PNG</button></div>
+<div class="card">
+  <h2>Reel Draft Generator</h2>
+  <p class="small">Create a vertical 1080 × 1920 Reel draft. Nothing is published.</p>
+  <label for="reelType">Reel type</label>
+  <select id="reelType">
+    <option value="news">News Reels</option>
+    <option value="facts">Facts Reels</option>
+    <option value="pov">POV / Viral Reels</option>
+  </select>
+  <label for="reelTopic">Topic</label>
+  <input id="reelTopic" maxlength="180" placeholder="India, AI, space, cricket">
+  <label for="reelTitle">Headline (optional)</label>
+  <input id="reelTitle" maxlength="180" placeholder="Leave blank to generate automatically">
+  <label for="reelDuration">Duration (seconds)</label>
+  <input id="reelDuration" type="number" min="5" max="30" value="12">
+  <button type="button" id="generateReelButton">Generate Reel Draft</button>
+  <p id="reelStatus" role="status"></p>
+</div>
+
 
 </div>
 
@@ -229,6 +249,7 @@ document.getElementById('canvaSchemaButton').addEventListener('click', async () 
       headers: { Authorization: 'Bearer ' + secret }
     });
     const d = await r.json();
+    if (d.authorization_url) { window.location.href = d.authorization_url; return; }
     status.textContent = r.ok
       ? JSON.stringify(d, null, 2)
       : 'Error: ' + (d.error || 'Request failed');
@@ -245,6 +266,7 @@ document.getElementById('canvaToolsButton').addEventListener('click', async () =
   try {
     const r = await fetch('/api/canva/tools', {headers: {'Authorization': 'Bearer ' + secret}});
     const d = await r.json();
+    if (d.authorization_url) { window.location.href = d.authorization_url; return; }
     if (!r.ok) throw new Error(d.error || 'Check failed');
     status.textContent = 'Canva tools: ' + d.tools.map(t => t.name).join(', ');
   } catch (e) { status.textContent = 'Error: ' + e.message; }
@@ -263,6 +285,7 @@ document.getElementById('canvaHelpButton').onclick = async function () {
       headers: { Authorization: 'Bearer ' + secret }
     });
     const d = await r.json();
+    if (d.authorization_url) { window.location.href = d.authorization_url; return; }
     status.textContent = r.ok
       ? JSON.stringify(d.result)
       : 'Error: ' + (d.error || 'Request failed');
@@ -368,6 +391,52 @@ document.getElementById('downloadPosterButton').addEventListener('click', () => 
   link.href = document.getElementById('posterCanvas').toDataURL('image/png');
   link.click();
 });
+
+document.getElementById('generateReelButton').addEventListener('click', async () => {
+  const secret = document.getElementById('agentSecret').value.trim();
+  const title = document.getElementById('reelTitle').value.trim();
+  const type = document.getElementById('reelType').value;
+  const topic = document.getElementById('reelTopic').value.trim();
+  const duration = Number(document.getElementById('reelDuration').value);
+  const button = document.getElementById('generateReelButton');
+  const status = document.getElementById('reelStatus');
+
+  if (!secret) { status.textContent = 'Enter your agent secret first.'; return; }
+  if (!topic) { status.textContent = 'Enter a Reel topic first.'; return; }
+  if (!Number.isFinite(duration) || duration < 5 || duration > 30) {
+    status.textContent = 'Choose a duration between 5 and 30 seconds.'; return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Generating Reel...';
+  status.textContent = 'Rendering your vertical Reel draft. Please wait.';
+  try {
+    const response = await fetch('/api/agent/generate-reel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + secret },
+      body: JSON.stringify({ title, type, topic, duration })
+    });
+    if (!response.ok) {
+      let message = 'Reel generation failed.';
+      try { message = (await response.json()).error || message; } catch {}
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'daily-frame-reel.mp4';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    status.textContent = 'Reel draft generated and downloaded. Review it before sharing; nothing was published.';
+  } catch (error) {
+    status.textContent = 'Error: ' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Generate Reel Draft';
+  }
+});
+
 document.getElementById('imageButton').addEventListener('click', async () => {
   const secret = document.getElementById('agentSecret').value.trim();
   const button = document.getElementById('imageButton');
@@ -787,7 +856,7 @@ app.post("/api/agent/draft", async (req, res) => {
                 ? "Focus on important international developments."
                 : "Focus on well-established, interesting facts.";
         const response = await gemini.models.generateContent({
-            model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+            model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
             contents: `Create one Instagram ${topicType} draft for Daily Frame. ${regionInstruction} Return valid JSON only with keys: headline, caption, image_prompt, source, fact_check_note. In source, provide the exact reliable source name and direct URL only if you genuinely know them; otherwise use an empty string. Never invent URLs or sources. Mark all sources and factual claims as requiring verification before publication. Make it engaging and concise. Never invent breaking news, dates, quotes, statistics, or sources. You do not have live news verification in this request, so clearly state in fact_check_note that news claims and dates must be checked against current reliable sources before publication. For facts, use well-established information and avoid dubious claims.`,
             config: {
                 responseMimeType: "application/json",
@@ -915,6 +984,71 @@ app.post("/api/agent/generate-image", async (req, res) => {
   }
 });
 
+
+const { createReel } = require("./reel-generator");
+
+app.post("/api/agent/generate-reel", async (req, res) => {
+  if (!validAgentSecret(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  let title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
+  const type = ["news", "facts", "pov"].includes(req.body?.type) ? req.body.type : "news";
+  const imageUrl = typeof req.body?.image_url === "string" ? req.body.image_url.trim() : "";
+  const duration = Number(req.body?.duration || 12);
+
+  if (!topic || topic.length > 180) {
+    return res.status(400).json({ error: "Provide a topic of up to 180 characters." });
+  }
+  if (title.length > 180) {
+    return res.status(400).json({ error: "Headline must be up to 180 characters." });
+  }
+  if (!Number.isFinite(duration) || duration < 5 || duration > 30) {
+    return res.status(400).json({ error: "Duration must be between 5 and 30 seconds." });
+  }
+  if (imageUrl && (!imageUrl.startsWith("https://upload.wikimedia.org/"))) {
+    return res.status(400).json({ error: "For now, use a direct Wikimedia Commons image URL." });
+  }
+
+  let result;
+  try {
+    if (!gemini) {
+      return res.status(503).json({ error: "Gemini is not configured." });
+    }
+    const kind = {
+      news: "news explainer; do not invent breaking news or current facts",
+      facts: "interesting fact; use established, verifiable information",
+      pov: "POV or viral-style idea; make it engaging without presenting fiction as fact"
+    }[type];
+    const response = await gemini.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+      contents: `Create a short Instagram Reel for Daily Frame. Topic: ${topic}. Type: ${kind}. Target duration: ${duration} seconds. ${title ? `Use this headline: ${title}.` : "Create a punchy headline."} Return JSON only with keys headline, script, source, fact_check_note. Keep the headline under 100 characters and the spoken script concise enough for the duration. For news, state that current claims and dates must be verified against reliable sources; do not invent sources or URLs. For facts, avoid dubious statistics and unsupported claims. For POV, label imagined scenarios clearly when needed. Nothing is being published automatically.`,
+      config: { responseMimeType: "application/json", temperature: 0.7 }
+    });
+    const draft = JSON.parse(response.text || "{}");
+    title = title || String(draft.headline || "").trim();
+    const script = String(draft.script || "").trim();
+    if (!title || !script) {
+      throw new Error("Gemini did not return a headline and script.");
+    }
+    result = await createReel({ title, script, imageUrl: imageUrl || null, duration });
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Disposition", 'attachment; filename="daily-frame-reel.mp4"');
+    res.setHeader("X-Published", "false");
+    return res.sendFile(result.output, async (err) => {
+      await require("node:fs/promises").rm(result.work, { recursive: true, force: true }).catch(() => {});
+      if (err) console.error("Reel download error:", err.message);
+    });
+  } catch (err) {
+    if (result?.work) {
+      await require("node:fs/promises").rm(result.work, { recursive: true, force: true }).catch(() => {});
+    }
+    console.error("Reel generation error:", err.message);
+    return res.status(500).json({ error: "Could not generate the Reel draft." });
+  }
+});
+
 // AI configuration status (never exposes secret values)
 app.get("/api/ai/status", (req, res) => {
     res.json({
@@ -939,54 +1073,73 @@ app.get("/api", (req, res) => {
   });
 });
 
-app.get("/api/canva/help", async (req, res) => {
-    if (!validAgentSecret(req)) return res.status(401).json({error: "Unauthorized"});
-    try {
-        const {getCanvaSession} = require("./canva-db");
-        const {callCanvaTool} = require("./canva-mcp");
-        const session = await getCanvaSession("daily-frame-canva");
-        const token = session && session.tokens && session.tokens.access_token;
-        if (!token) return res.status(401).json({error: "Canva access token missing"});
-        const result = await callCanvaTool(token, "help", { prompt: "Explain which Canva MCP tools can create a 1080 x 1350 Instagram feed design with a headline and image, and show the required arguments for those tools." });
-        return res.json({connected: true, result});
-    } catch (e) {
-        console.error("Canva help test failed:", e.message);
-        return res.status(500).json({error: "Canva help test failed; check server logs"});
+async function handleCanvaMcpError(res, label, error) {
+  console.error(label + ":", error.message);
+
+  try {
+    const { getCanvaMcpAuthorizationUrl } = require("./canva-mcp");
+    const authorizationUrl = await getCanvaMcpAuthorizationUrl();
+    if (authorizationUrl) {
+      return res.status(401).json({
+        error: "Canva MCP authorization is required.",
+        authorization_url: authorizationUrl,
+      });
     }
+  } catch (lookupError) {
+    console.error("Canva MCP auth-state lookup failed:", lookupError.message);
+  }
+
+  return res.status(500).json({
+    error: label + "; check server logs",
+  });
+}
+
+app.get("/api/canva/help", async (req, res) => {
+  if (!validAgentSecret(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const { callCanvaTool } = require("./canva-mcp");
+    const result = await callCanvaTool("help", {
+      prompt: "Explain which Canva MCP tools can create a 1080 x 1350 Instagram feed design with a headline and image, and show the required arguments for those tools.",
+    });
+    return res.json({ connected: true, result });
+  } catch (error) {
+    return handleCanvaMcpError(res, "Canva help test failed", error);
+  }
 });
 
 app.get("/api/canva/tool-schema", async (req, res) => {
-  if (!validAgentSecret(req)) return res.status(401).json({error: "Unauthorized"});
+  if (!validAgentSecret(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
     const name = String(req.query.name || "generate-design");
-    const {getCanvaSession} = require("./canva-db");
-    const {getCanvaToolSchema} = require("./canva-mcp");
-    const session = await getCanvaSession("daily-frame-canva");
-    const token = session && session.tokens && session.tokens.access_token;
-    if (!token) return res.status(401).json({error: "Canva access token missing"});
-    const schema = await getCanvaToolSchema(token, name);
-    if (!schema) return res.status(404).json({error: "Canva tool not found"});
+    const { getCanvaToolSchema } = require("./canva-mcp");
+    const schema = await getCanvaToolSchema(name);
+    if (!schema) {
+      return res.status(404).json({ error: "Canva tool not found" });
+    }
     return res.json(schema);
-  } catch (e) {
-    console.error("Canva tool schema check failed:", e.message);
-    return res.status(500).json({error: "Canva tool schema check failed; check server logs"});
+  } catch (error) {
+    return handleCanvaMcpError(res, "Canva tool schema check failed", error);
   }
 });
 
 app.get("/api/canva/tools", async (req, res) => {
-    if (!validAgentSecret(req)) return res.status(401).json({error:"Unauthorized"});
-    try {
-        const {getCanvaSession} = require("./canva-db");
-        const {listCanvaTools} = require("./canva-mcp");
-        const session = await getCanvaSession("daily-frame-canva");
-        const token = session && session.tokens && session.tokens.access_token;
-        if (!token) return res.status(401).json({error:"Canva session or access token missing"});
-        const tools = await listCanvaTools(token);
-        return res.json({connected:true, tools});
-    } catch (e) {
-        console.error("Canva tools check failed:", e.message);
-        return res.status(500).json({error:"Canva tools check failed; check server logs"});
-    }
+  if (!validAgentSecret(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const { listCanvaTools } = require("./canva-mcp");
+    const tools = await listCanvaTools();
+    return res.json({ connected: true, tools });
+  } catch (error) {
+    return handleCanvaMcpError(res, "Canva tools check failed", error);
+  }
 });
 
 registerCanvaOAuth(app);
