@@ -122,4 +122,6 @@ module.exports = {
   getCanvaSession,
   saveCanvaSession,
   deleteCanvaSession,
+  encrypt,
+  decrypt,
 };

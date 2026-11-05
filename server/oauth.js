@@ -2,6 +2,7 @@ const express = require("express");
 const { GoogleGenAI } = require("@google/genai");
 const cloudinary = require("cloudinary").v2;
 const { registerCanvaOAuth } = require("./canva-oauth");
+const { initializeInstagramDatabase, saveInstagramToken, getInstagramToken } = require("./instagram-db");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,9 +28,9 @@ function validAgentSecret(req) {
 let metaAccessToken = null;
 
 const GRAPH_API = "https://graph.facebook.com/v24.0";
-const CONFIG_ID = "2337933193701778";
+const CONFIG_ID = "4840479466281678";
 const PAGE_ID = "1309773125563524";
-const IG_ID = "17841425938237273";
+const IG_ID = "17841447217911984";
 
 // Dashboard
 app.get("/", (req, res) => {
@@ -59,7 +60,7 @@ button{font-size:16px}
 <div class="card">
 <h2>Account Connection</h2>
 <p>Facebook Page: Daily Frame</p>
-<p>Instagram: @the.daily.frame17</p>
+<p>Instagram: @softsoul.music</p>
 <p>Instagram ID: ${IG_ID}</p>
 <p id="status">Checking Meta connection...</p>
 <a href="/auth/meta/login">Connect / Reconnect Meta</a>
@@ -568,6 +569,7 @@ app.get("/auth/meta/callback", async (req, res) => {
     }
 
     metaAccessToken = data.access_token;
+  await saveInstagramToken(metaAccessToken);
 
     console.log("Meta access token received successfully.");
 
@@ -1144,6 +1146,24 @@ app.get("/api/canva/tools", async (req, res) => {
 
 registerCanvaOAuth(app);
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port " + PORT);
-});
+async function startServer() {
+  try {
+    await initializeInstagramDatabase();
+    metaAccessToken = await getInstagramToken();
+
+    console.log(
+      metaAccessToken
+        ? "Instagram token restored from database."
+        : "No saved Instagram token found."
+    );
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("Server running on port " + PORT);
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
